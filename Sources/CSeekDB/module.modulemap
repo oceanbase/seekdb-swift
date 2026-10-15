@@ -1,0 +1,4 @@
+module CSeekDB [system] {
+    header "shim.h"
+    export *
+}
