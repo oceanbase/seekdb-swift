@@ -17,9 +17,9 @@ from `Sources/SeekDB`. The engine is seekdb's
 `SeekDB.framework`, which `build.sh` in this directory packages as
 `build/SeekDBEngine.xcframework` next to it (see [Build](#build)); when that exists,
 the package uses it as the binary target `SeekDBEngine`, and otherwise SwiftPM downloads
-the engine that `Package.swift` names from a release of this repository (release
-`0.1.0`, built from seekdb `9786f15d9`) and checks its checksum. Both hold iOS slices
-only for now.
+the engine that `Package.swift` names in `releasedEngine` and `releasedEngineChecksum`
+from a release of this repository and checks its checksum; `release.sh` writes both.
+Both hold iOS slices only for now.
 
 `CSeekDB` is a module map whose `shim.h` includes the framework's own
 `<SeekDB/seekdb.h>`. That header comes from seekdb's
@@ -148,24 +148,27 @@ and verified but not run on a device.
 
 ## Release
 
-`release.sh` prepares a release of this package in a checkout of
-[cao1629/seekdb-swift](https://github.com/cao1629/seekdb-swift), the repository that
-apps add by URL. Package the device and Simulator frameworks with `build.sh` from a
-clean seekdb tree first, then:
+`release.sh VERSION` prepares a release of this package in this repository,
+[oceanbase/seekdb-swift](https://github.com/oceanbase/seekdb-swift), the repository
+that apps add by URL. Package the device and Simulator frameworks with `build.sh` from
+a clean seekdb tree first, then, in a clone of this repository:
 
 ```sh
-git clone https://github.com/cao1629/seekdb-swift.git ~/seekdb-swift
-swift/release.sh 0.1.0 ~/seekdb-swift
+git clone https://github.com/oceanbase/seekdb-swift.git ~/seekdb-swift
+cd ~/seekdb-swift
+SEEKDB_DIR=/path/to/seekdb bash build.sh
+bash release.sh 0.2.0
 ```
 
 It checks that both slices come from the same seekdb revision built without
 uncommitted changes (`ALLOW_DIRTY=1` allows a trial run), zips the XCFramework
 without macOS `._` files into `build/release/<version>/`, computes the archive's
-checksum, and writes `Package.swift` (whose `binaryTarget(url:checksum:)` points at
-the GitHub Release asset), `Sources/`, `README.md`, `LICENSE` and `.gitignore` into
-the checkout. It then prints the commit, tag, push and `gh release create` commands
-and publishes nothing itself. Upload exactly the archive it made, since the checksum
-belongs to that file. `RELEASE_REPOSITORY` names another repository.
+checksum, and writes the release asset's URL and that checksum into `releasedEngine`
+and `releasedEngineChecksum` in `Package.swift`. It then prints the commit, push and
+`gh release create` commands and publishes nothing itself. `gh release create` makes
+the version tag on the pushed commit and uploads the archive; upload exactly the
+archive it made, since the checksum belongs to that file. `RELEASE_REPOSITORY` names
+another repository.
 
 Versions stay at 0.x while the engine comes from an unreleased seekdb branch; once
 a seekdb release ships the in-process runtime, the package takes that release's
