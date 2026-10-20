@@ -17,14 +17,11 @@ import Foundation
 import PackageDescription
 
 let engineFramework = "build/SeekDBEngine.xcframework"
-let hasEngineFramework = FileManager.default.fileExists(atPath: Context.packageDirectory + "/" + engineFramework)
-
-var seekdbDependencies: [Target.Dependency] = ["CSeekDB"]
-var engineTargets: [Target] = []
-if hasEngineFramework {
-    seekdbDependencies.append("SeekDBEngine")
-    engineTargets.append(.binaryTarget(name: "SeekDBEngine", path: engineFramework))
-}
+let releasedEngine = "https://github.com/oceanbase/seekdb-swift/releases/download/0.1.0/SeekDBEngine.xcframework.zip"
+let releasedEngineChecksum = "20eb7bcb6f20912887251b13cd3819e9ac0a6cf043175135c6591060e79a783e"
+let engine: Target = FileManager.default.fileExists(atPath: Context.packageDirectory + "/" + engineFramework)
+    ? .binaryTarget(name: "SeekDBEngine", path: engineFramework)
+    : .binaryTarget(name: "SeekDBEngine", url: releasedEngine, checksum: releasedEngineChecksum)
 
 let package = Package(
     name: "seekdb-bindings",
@@ -34,8 +31,9 @@ let package = Package(
         .systemLibrary(name: "CSeekDB"),
         .target(
             name: "SeekDB",
-            dependencies: seekdbDependencies,
+            dependencies: ["CSeekDB", "SeekDBEngine"],
             swiftSettings: [.enableExperimentalFeature("CheckImplementationOnly")]
-        )
-    ] + engineTargets
+        ),
+        engine
+    ]
 )

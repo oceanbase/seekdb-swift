@@ -16,7 +16,10 @@ This directory is a SwiftPM package: `Package.swift` exposes the `SeekDB` librar
 from `Sources/SeekDB`. The engine is seekdb's
 `SeekDB.framework`, which `build.sh` in this directory packages as
 `build/SeekDBEngine.xcframework` next to it (see [Build](#build)); when that exists,
-the package adds it as the binary target `SeekDBEngine`. It holds iOS slices only for now.
+the package uses it as the binary target `SeekDBEngine`, and otherwise SwiftPM downloads
+the engine that `Package.swift` names from a release of this repository (release
+`0.1.0`, built from seekdb `9786f15d9`) and checks its checksum. Both hold iOS slices
+only for now.
 
 `CSeekDB` is a module map whose `shim.h` includes the framework's own
 `<SeekDB/seekdb.h>`. That header comes from seekdb's
@@ -36,21 +39,22 @@ clients would compute such a type's layout without seeing `CSeekDB`.
 ```swift
 // In a consuming package's Package.swift:
 dependencies: [
-    .package(path: "../seekdb-bindings/swift")
+    .package(url: "https://github.com/oceanbase/seekdb-swift.git", from: "0.1.0")
 ],
 targets: [
     .target(name: "MyApp", dependencies: [
-        .product(name: "SeekDB", package: "swift")
+        .product(name: "SeekDB", package: "seekdb-swift")
     ])
 ]
 ```
 
-SwiftPM names a package added by path after its directory, hence `package: "swift"`.
-It reads a Git-URL dependency's `Package.swift` only from the repository root, so
-this package is used by path; Git-URL consumption will need a separate repository
-with its own root manifest. A native engine is still required, just as the Java
-JAR requires its matching native components. The package does not download
-engines or change process search paths.
+In Xcode, add `https://github.com/oceanbase/seekdb-swift` with File > Add Package
+Dependencies. Inside seekdb-bindings this package is the `swift/` submodule; added by
+path (`.package(path: "../seekdb-bindings/swift")`), SwiftPM names it after its
+directory, so the product is `.product(name: "SeekDB", package: "swift")`. A native
+engine is still required, just as the Java JAR requires its matching native
+components; the package downloads a released one when no local build exists, and it
+does not change process search paths.
 
 ## Build
 
@@ -150,8 +154,8 @@ apps add by URL. Package the device and Simulator frameworks with `build.sh` fro
 clean seekdb tree first, then:
 
 ```sh
-git clone https://github.com/cao1629/seekdb-swift.git ~/repo/seekdb-swift
-swift/release.sh 0.1.0 ~/repo/seekdb-swift
+git clone https://github.com/cao1629/seekdb-swift.git ~/seekdb-swift
+swift/release.sh 0.1.0 ~/seekdb-swift
 ```
 
 It checks that both slices come from the same seekdb revision built without

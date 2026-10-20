@@ -15,16 +15,11 @@
 
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-root=$(cd "$here/../.." && pwd)
 export DEVELOPER_DIR=${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}
 simulator=${1:?Usage: swift/example/run.sh SIMULATOR_UDID}
 bundle=org.seekdb.example
 derived="$here/build"
 
-if [[ ! -d "$root/swift/build/SeekDBEngine.xcframework" ]]; then
-  echo "Run SEEKDB_DIR=<seekdb checkout> bash swift/build.sh first" >&2
-  exit 1
-fi
 xcodegen generate --spec "$here/project.yml" --project "$here" --quiet
 xcodebuild -project "$here/SeekDBExample.xcodeproj" -scheme SeekDBExample \
   -destination "platform=iOS Simulator,id=$simulator" -derivedDataPath "$derived" build

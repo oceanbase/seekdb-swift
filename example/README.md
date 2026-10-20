@@ -1,10 +1,11 @@
 # iOS example App
 
-This directory is a SwiftUI App that uses the Swift package in `swift/` the way an
-application would. It depends on that package and on the
-`swift/build/SeekDBEngine.xcframework` that `swift/build.sh` packages from seekdb's
-`SeekDB.framework`; the [Swift bindings](../README.md#build) describe how to
-build both, and the runtime constraints apps have to follow.
+This directory is a SwiftUI App that uses the Swift package one directory up the way
+an application would. It gets the engine the way the package does: the
+`build/SeekDBEngine.xcframework` that the package's `build.sh` packages from seekdb's
+`SeekDB.framework` when it exists, and the released engine otherwise; the
+[Swift bindings](../README.md#build) describe how to build it, and the runtime
+constraints apps have to follow.
 
 On launch the App opens a database in its `Documents/seekdb` directory with
 `SeekDB.open`, connects to the Unix socket from `connectionOptions()` with
@@ -16,13 +17,13 @@ or `{"error": ...}` when a step fails. MySQLNIO always assumes the
 `MySQLCommand` that reads a text result set either way.
 
 The Xcode project is generated from `project.yml` with
-[XcodeGen](https://github.com/yonaskolb/XcodeGen). It depends on the package in
-`swift/` by local path and on MySQLNIO and SwiftNIO from GitHub, and it signs ad hoc
+[XcodeGen](https://github.com/yonaskolb/XcodeGen). It depends on the package one
+directory up by local path and on MySQLNIO and SwiftNIO from GitHub, and it signs ad hoc
 for the Simulator; to run on a device, open the generated `SeekDBExample.xcodeproj`
 in Xcode and choose a team. `run.sh` generates the project, builds the App for
 a Simulator into `build/`, installs and launches it, and waits up to 300
-seconds for `select1.json`; it fails unless the result is 1. Package the framework
-with `swift/build.sh` first.
+seconds for `select1.json`; it fails unless the result is 1. To run it against your
+own seekdb build, package the framework with the package's `build.sh` first.
 
 ```sh
 brew install xcodegen
