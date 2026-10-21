@@ -12,37 +12,38 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: SeekDBExample
+name: SeekDBShell
 options:
   deploymentTarget:
     iOS: "18.0"
+  developmentLanguage: en
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
 packages:
   SeekDB:
     path: ..
   MySQLNIO:
     url: https://github.com/vapor/mysql-nio.git
-    from: "1.0.0"
+    from: "1.9.0"
   NIO:
     url: https://github.com/apple/swift-nio.git
     from: "2.0.0"
+  ShellCore:
+    path: Packages/ShellCore
 targets:
-  SeekDBExample:
+  SeekDBShell:
     type: application
     platform: iOS
     sources:
-      - Sources
-    scheme: {}
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: org.seekdb.example
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_UILaunchScreen_Generation: YES
-        INFOPLIST_KEY_CFBundleDisplayName: SeekDB Example
-        MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: "1"
-        SWIFT_VERSION: "5.0"
-        CODE_SIGN_STYLE: Manual
-        CODE_SIGN_IDENTITY: "-"
+      - App
     dependencies:
       - package: SeekDB
         product: SeekDB
@@ -52,3 +53,37 @@ targets:
         product: NIOCore
       - package: NIO
         product: NIOPosix
+      - package: ShellCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.seekdb.shell
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: SeekDB Shell
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+  SeekDBShellUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - UITests
+    dependencies:
+      - target: SeekDBShell
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.seekdb.shell.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: SeekDBShell
+schemes:
+  SeekDBShell:
+    build:
+      targets:
+        SeekDBShell: all
+        SeekDBShellUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - SeekDBShellUITests
