@@ -16,29 +16,36 @@
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 export DEVELOPER_DIR=${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}
-seekdb=${SEEKDB_DIR:?Set SEEKDB_DIR to an oceanbase/seekdb checkout built with ./build.sh release --ios [--simulator] --framework --make}
+seekdb=${SEEKDB_DIR:?Set SEEKDB_DIR to an oceanbase/seekdb checkout where SeekDB.framework is built, as Build in README.md describes}
 output="$here/build/SeekDBEngine.xcframework"
 derived="$here/.build/xcode"
 
 frameworks=()
 destinations=()
-for slice in "build_ios_release:IOS:iOS" "build_ios_simulator_release:IOSSIMULATOR:iOS Simulator"; do
-  IFS=: read -r directory expected destination <<<"$slice"
-  framework="$seekdb/$directory/framework/SeekDB.framework"
-  if [[ ! -d "$framework" ]]; then
-    continue
-  fi
-  platform=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["platform"])' \
-    "$framework/build-manifest.json")
-  if [[ "$platform" != "$expected" ]]; then
-    echo "$framework is built for $platform, expected $expected" >&2
-    exit 1
-  fi
-  frameworks+=(-framework "$framework")
-  destinations+=("generic/platform=$destination")
+for slice in "IOS:iOS:build_ios/bin/src/observer build/bin/src/observer build_ios_release" \
+  "IOSSIMULATOR:iOS Simulator:build_ios_simulator/bin/src/observer build/bin/src/observer build_ios_simulator_release"; do
+  IFS=: read -r expected destination directories <<<"$slice"
+  for directory in $directories; do
+    framework="$seekdb/$directory/framework/SeekDB.framework"
+    if [[ ! -d "$framework" ]]; then
+      continue
+    fi
+    platform=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["platform"])' \
+      "$framework/build-manifest.json")
+    if [[ "$platform" == "$expected" ]]; then
+      echo "Packaging $framework"
+      frameworks+=(-framework "$framework")
+      destinations+=("generic/platform=$destination")
+      break
+    fi
+    if [[ "$directory" != build/bin/src/observer ]]; then
+      echo "$framework is built for $platform, expected $expected" >&2
+      exit 1
+    fi
+  done
 done
 if [[ ${#frameworks[@]} -eq 0 ]]; then
-  echo "No SeekDB.framework in $seekdb; run ./build.sh release --ios [--simulator] --framework --make there first" >&2
+  echo "No SeekDB.framework in $seekdb; build it there first, as Build in README.md describes" >&2
   exit 1
 fi
 mkdir -p "$here/build"

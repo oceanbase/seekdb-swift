@@ -37,7 +37,8 @@ manifests = [json.load(open("%s/%s/SeekDB.framework/build-manifest.json" % (sys.
 revisions = sorted({manifest["source_revision"] for manifest in manifests})
 if len(revisions) != 1:
     sys.exit("The device and Simulator slices come from different seekdb revisions: " + ", ".join(revisions))
-print(revisions[0], int(any(manifest["source_dirty"] for manifest in manifests)))
+states = [manifest.get("source_dirty") for manifest in manifests]
+print(revisions[0], "unknown" if None in states else int(any(states)))
 EOF
 )
 read -r revision dirty <<<"$provenance"
@@ -47,6 +48,8 @@ if [[ $dirty == 1 ]]; then
     exit 1
   fi
   echo "warning: SeekDB.framework was built from seekdb $revision with uncommitted changes; do not publish this archive" >&2
+elif [[ $dirty == unknown ]]; then
+  echo "warning: build-manifest.json does not record whether seekdb $revision had uncommitted changes; publish only a framework built from a clean tree" >&2
 fi
 for name in releasedEngine releasedEngineChecksum; do
   if [[ $(grep -c "^let $name = \"" "$manifest") != 1 ]]; then

@@ -12,21 +12,22 @@ MySQL-protocol client; the [iOS example App](example/README.md) uses MySQLNIO.
 
 ## Package layout
 
-This directory is a SwiftPM package: `Package.swift` exposes the `SeekDB` library
-from `Sources/SeekDB`. The engine is seekdb's
-`SeekDB.framework`, which `build.sh` in this directory packages as
-`build/SeekDBEngine.xcframework` next to it (see [Build](#build)); when that exists,
-the package uses it as the binary target `SeekDBEngine`, and otherwise SwiftPM downloads
-the engine that `Package.swift` names in `releasedEngine` and `releasedEngineChecksum`
-from a release of this repository and checks its checksum; `release.sh` writes both.
-Both hold iOS slices only for now.
+This repository is a SwiftPM package: `Package.swift` exposes the `SeekDB` library
+from `Sources/SeekDB`. The engine is seekdb's `SeekDB.framework`, which `build.sh`
+packages as `build/SeekDBEngine.xcframework` (see [Build](#build)). When that exists
+as SwiftPM resolves the package, the package uses it as the binary target
+`SeekDBEngine`; otherwise SwiftPM downloads the engine that `Package.swift` names in
+`releasedEngine` and `releasedEngineChecksum` from a release of this repository and
+checks its checksum; `release.sh` writes both. SwiftPM caches that choice, and
+[Build](#build) says when to clear it. Both hold iOS slices only for now.
 
 `CSeekDB` is a module map whose `shim.h` includes the framework's own
 `<SeekDB/seekdb.h>`. That header comes from seekdb's
-`src/observer/in_process/seekdb.h` and declares `seekdb_open`,
-`seekdb_last_open_error`, `seekdb_close` and `seekdb_connection_options`. The
-repository's `lib/include/seekdb/seekdb.h` belongs to the out-of-process `libseekdb`
-and is not used here.
+`rust/in-process/include/seekdb.h` (`src/observer/in_process/seekdb.h` in the seekdb
+revision that release 0.1.0's engine was built from) and declares `seekdb_open`,
+`seekdb_last_open_error`, `seekdb_close` and `seekdb_connection_options`.
+seekdb-bindings' `lib/include/seekdb/seekdb.h` belongs to the out-of-process
+`libseekdb` and is not used here.
 
 `NativeAPI.swift` imports `CSeekDB` with `@_implementationOnly`. With a plain or
 `internal import`, every module that imports `SeekDB` must also find the `CSeekDB`
@@ -56,25 +57,56 @@ engine is still required, just as the Java JAR requires its matching native
 components; the package downloads a released one when no local build exists, and it
 does not change process search paths.
 
+The package needs Swift 6.0 or later, that is Xcode 16 or later, and apps need iOS 18
+or later. The engine has iOS slices only, so build for an iOS device or Simulator:
+with My Mac as the destination, Xcode stops with "While building for macOS, no library
+for this platform was found".
+
 ## Build
 
 Requires macOS with full Xcode and the iOS SDKs. `build.sh` uses
-`/Applications/Xcode.app/Contents/Developer` unless `DEVELOPER_DIR` is set. Build
-the framework in a seekdb checkout, then package it:
+`/Applications/Xcode.app/Contents/Developer` unless `DEVELOPER_DIR` is set.
+
+The in-process engine comes from
+[oceanbase/seekdb#1514](https://github.com/oceanbase/seekdb/pull/1514), which is to be
+rebased onto seekdb's Bazel build and merged into `master`. With the Bazel build,
+build the framework in a seekdb checkout and package it here:
 
 ```sh
 cd /path/to/seekdb
+./build.py init --ios
+./build.py build -o build_ios --config=ios seekdb                        # device
+./build.py init --ios --simulator
+./build.py build -o build_ios_simulator --config=ios-simulator seekdb    # Simulator
+cd /path/to/seekdb-swift
+SEEKDB_DIR=/path/to/seekdb bash build.sh
+```
+
+Until then, the pull request's branch, `feature/in-process-embedded-mode`, builds the
+framework with CMake instead; `build.sh` packages it the same way:
+
+```sh
 ./build.sh release --ios --framework --init --make -j8               # device
 ./build.sh release --ios --simulator --framework --init --make -j8   # Simulator
-cd /path/to/seekdb-bindings
-SEEKDB_DIR=/path/to/seekdb bash swift/build.sh
 ```
 
 `build.sh` puts each `SeekDB.framework` it finds in `SEEKDB_DIR` (device, Simulator
-or both) into `build/SeekDBEngine.xcframework` in this directory, after checking each
-framework's platform. `BUILD_SWIFT_PACKAGE=1` also builds this package with
-`xcodebuild` for each packaged platform; its intermediate files go to `.build/xcode`
-here.
+or both) into `build/SeekDBEngine.xcframework`, after checking the platform that each
+framework's `build-manifest.json` names. For each platform it takes the first
+framework it finds under `build_ios/bin/src/observer` or
+`build_ios_simulator/bin/src/observer` (Bazel with `-o`), `build/bin/src/observer`
+(Bazel without `-o`, which keeps only the platform built last) and
+`build_ios_release` or `build_ios_simulator_release` (CMake), each followed by
+`framework/SeekDB.framework`. `BUILD_SWIFT_PACKAGE=1` also builds this package with
+`xcodebuild` for each packaged platform; its intermediate files go to `.build/xcode`.
+
+SwiftPM caches what `Package.swift` returns by the file's contents, not by whether
+`build/SeekDBEngine.xcframework` exists. A package that Xcode or SwiftPM resolved
+before `build.sh` created that directory keeps using the released engine, and one
+resolved while it existed fails after it is deleted, with "local binary target
+'SeekDBEngine' at '.../build/SeekDBEngine.xcframework' does not contain a binary
+artifact". Delete `~/Library/Caches/org.swift.swiftpm/manifests` after creating or
+deleting the directory.
 
 ## API
 
@@ -146,6 +178,19 @@ package that depends on this one by local path opened the engine through the
 crash when it exited with the engine still running. The Device framework was built
 and verified but not run on a device.
 
+On 2026-10-21, with Xcode 26.6 (iOS 26.5 SDK), Swift tools version 6.0 and macOS's
+bash 3.2, `build.sh` packaged three layouts:
+- release 0.1.0's slices, placed as the CMake build places them;
+- the Simulator framework from a Bazel build of seekdb `b24ba7648`, together with
+  release 0.1.0's device slice under a manifest rewritten to match it, placed as
+  `-o build_ios` and `-o build_ios_simulator` place them;
+- that Bazel checkout itself, whose `build` held only the Simulator framework.
+
+With `BUILD_SWIFT_PACKAGE=1`, the package built for iOS and the iOS Simulator from the
+first two layouts. A trial `release.sh 0.1.1` worked on both, and warned for the Bazel
+manifests. The SwiftPM cache behaviour described under [Build](#build) was observed
+the same day.
+
 ## Release
 
 `release.sh VERSION` prepares a release of this package in this repository,
@@ -161,7 +206,9 @@ bash release.sh 0.2.0
 ```
 
 It checks that both slices come from the same seekdb revision built without
-uncommitted changes (`ALLOW_DIRTY=1` allows a trial run), zips the XCFramework
+uncommitted changes (`ALLOW_DIRTY=1` allows a trial run). The Bazel build does not
+record uncommitted changes, so for its frameworks `release.sh` only warns, and the
+seekdb tree has to be clean when they are built. It then zips the XCFramework
 without macOS `._` files into `build/release/<version>/`, computes the archive's
 checksum, and writes the release asset's URL and that checksum into `releasedEngine`
 and `releasedEngineChecksum` in `Package.swift`. It then prints the commit, push and
