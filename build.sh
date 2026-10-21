@@ -47,7 +47,7 @@ xcodebuild -create-xcframework "${frameworks[@]}" -output "$output"
 
 if [[ ${BUILD_SWIFT_PACKAGE:-0} == 1 ]]; then
   for destination in "${destinations[@]}"; do
-    (cd "$here" && xcodebuild -scheme seekdb-bindings -destination "$destination" \
+    (cd "$here" && xcodebuild -scheme seekdb-swift -destination "$destination" \
       -derivedDataPath "$derived" CODE_SIGNING_ALLOWED=NO build)
   done
 fi

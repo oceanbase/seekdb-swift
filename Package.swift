@@ -24,7 +24,7 @@ let engine: Target = FileManager.default.fileExists(atPath: Context.packageDirec
     : .binaryTarget(name: "SeekDBEngine", url: releasedEngine, checksum: releasedEngineChecksum)
 
 let package = Package(
-    name: "seekdb-bindings",
+    name: "seekdb-swift",
     platforms: [.macOS(.v13), .iOS("18.0")],
     products: [.library(name: "SeekDB", targets: ["SeekDB"])],
     targets: [
