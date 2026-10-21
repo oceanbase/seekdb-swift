@@ -68,9 +68,10 @@ Requires macOS with full Xcode and the iOS SDKs. `build.sh` uses
 `/Applications/Xcode.app/Contents/Developer` unless `DEVELOPER_DIR` is set.
 
 The in-process engine comes from
-[oceanbase/seekdb#1514](https://github.com/oceanbase/seekdb/pull/1514), which is to be
-rebased onto seekdb's Bazel build and merged into `master`. With the Bazel build,
-build the framework in a seekdb checkout and package it here:
+[oceanbase/seekdb#1514](https://github.com/oceanbase/seekdb/pull/1514), which builds it
+with Bazel and is to be merged into `master`. Build the framework in a checkout of its
+branch, `feature/in-process-embedded-mode`, or of `master` once it is merged, and
+package it here:
 
 ```sh
 cd /path/to/seekdb
@@ -82,8 +83,8 @@ cd /path/to/seekdb-swift
 SEEKDB_DIR=/path/to/seekdb bash build.sh
 ```
 
-Until then, the pull request's branch, `feature/in-process-embedded-mode`, builds the
-framework with CMake instead; `build.sh` packages it the same way:
+Before 2026-10-21 the branch built the framework with CMake, and `build.sh` packages
+such builds too; at `3dcaf865a` the commands were:
 
 ```sh
 ./build.sh release --ios --framework --init --make -j8               # device
