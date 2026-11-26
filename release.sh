@@ -60,7 +60,15 @@ done
 
 rm -rf "$(dirname "$archive")"
 mkdir -p "$(dirname "$archive")"
-ditto -c -k --norsrc --noextattr --noqtn --noacl --keepParent "$framework" "$archive"
+stage=$(mktemp -d)
+trap 'rm -rf "$stage"' EXIT
+staged_framework="$stage/SeekDBEngine.xcframework"
+ditto "$framework" "$staged_framework"
+# The Swift target owns the name SeekDB. CSeekDB imports the framework header.
+for slice in ios-arm64 ios-arm64-simulator; do
+  rm -f "$staged_framework/$slice/SeekDB.framework/Modules/module.modulemap"
+done
+ditto -c -k --norsrc --noextattr --noqtn --noacl --keepParent "$staged_framework" "$archive"
 checksum=$(swift package compute-checksum "$archive")
 url="https://github.com/$repository/releases/download/$version/SeekDBEngine.xcframework.zip"
 
