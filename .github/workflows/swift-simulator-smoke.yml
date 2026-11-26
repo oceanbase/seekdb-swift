@@ -1,0 +1,91 @@
+name: Test Swift 1.4.1 in the iOS Simulator
+
+on:
+  push:
+    branches: [codex/smoke-swift-1.4.1]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  simulator:
+    runs-on: macos-26
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: d5a158daaf272a1d367ba37b9de03ee11a867fd2
+          persist-credentials: false
+      - name: Select the binary artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          draft=$(gh api repos/oceanbase/seekdb-swift/releases/tags/1.4.1 --jq .draft 2>/dev/null || true)
+          if [[ "$draft" == false ]]; then
+            echo 'Testing the public SwiftPM dependency at exact version 1.4.1.'
+            echo 'SEEKDB_PUBLIC=1' >> "$GITHUB_ENV"
+            python3 - <<'PY'
+          from pathlib import Path
+          project = Path("example/project.yml")
+          text = project.read_text()
+          old = "  SeekDB:\n    path: ..\n"
+          assert text.count(old) == 1
+          project.write_text(text.replace(old, '  SeekDB:\n    url: https://github.com/oceanbase/seekdb-swift.git\n    exactVersion: "1.4.1"\n'))
+          PY
+          else
+            echo 'Testing the exact candidate release archive.'
+            gh run download 45800906288 --name swift-1.4.1-publication --dir "$RUNNER_TEMP/release"
+            zip="$RUNNER_TEMP/release/SeekDBEngine.xcframework.zip"
+            printf '%s  %s\n' 3d572c5253d4b7d6b09ddd47ad6917d6a341af162b0e4968d66080a23b660280 "$zip" | shasum -a 256 -c
+            ditto -x -k "$zip" build
+          fi
+      - name: Generate the Xcode project
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download 2.49.0 --repo yonaskolb/XcodeGen --pattern xcodegen.zip --dir "$RUNNER_TEMP"
+          printf '%s  %s\n' ae5598b33a19ad1e23e775d6648f97375c3529c970905f489358a21055b65e53 "$RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c
+          ditto -x -k "$RUNNER_TEMP/xcodegen.zip" "$RUNNER_TEMP/xcodegen"
+          generator=$(find "$RUNNER_TEMP/xcodegen" -type f -path '*/bin/xcodegen' -print -quit)
+          test -x "$generator"
+          cd example
+          "$generator" generate --quiet
+      - name: Resolve dependencies in a clean Xcode cache
+        working-directory: example
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          xcodebuild -project SeekDBShell.xcodeproj -scheme SeekDBShell \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/packages" -resolvePackageDependencies
+          if [[ "${SEEKDB_PUBLIC:-0}" == 1 ]]; then
+            jq -e '.pins[] | select(.identity == "seekdb-swift" and .state.version == "1.4.1")' \
+              SeekDBShell.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          fi
+      - name: Boot an iPhone matching the Xcode SDK
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          version=$(xcrun --sdk iphonesimulator --show-sdk-version)
+          runtime="com.apple.CoreSimulator.SimRuntime.iOS-${version//./-}"
+          device=$(xcrun simctl list devices available -j | jq -er --arg runtime "$runtime" '[.devices[$runtime][] | select(.isAvailable and .name == "iPhone 17 Pro")] | first | .udid')
+          xcrun simctl boot "$device"
+          xcrun simctl bootstatus "$device"
+          echo "SEEKDB_SIMULATOR=$device" >> "$GITHUB_ENV"
+      - name: Run SQL and reconnect from the example app
+        working-directory: example
+        timeout-minutes: 12
+        run: >-
+          xcodebuild -project SeekDBShell.xcodeproj -scheme SeekDBShell
+          -destination "platform=iOS Simulator,id=$SEEKDB_SIMULATOR"
+          -clonedSourcePackagesDirPath "$RUNNER_TEMP/packages"
+          -derivedDataPath "$RUNNER_TEMP/simulator" -parallel-testing-enabled NO
+          -resultBundlePath "$RUNNER_TEMP/SeekDBShell.xcresult" test
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: swift-1.4.1-simulator-results
+          path: ${{ runner.temp }}/SeekDBShell.xcresult
+          retention-days: 3
