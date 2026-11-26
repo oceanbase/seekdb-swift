@@ -31,6 +31,8 @@ jobs:
           bash release.sh 1.4.1
           mkdir -p "$RUNNER_TEMP/publication"
           cp Package.swift build/release/1.4.1/SeekDBEngine.xcframework.zip "$RUNNER_TEMP/publication/"
+          mv build/SeekDBEngine.xcframework "$RUNNER_TEMP/official-engine"
+          ditto -x -k "$RUNNER_TEMP/publication/SeekDBEngine.xcframework.zip" build
       - uses: actions/upload-artifact@v7
         with:
           name: swift-1.4.1-publication
