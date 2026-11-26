@@ -1,0 +1,64 @@
+name: Validate Swift 1.4.1
+
+on:
+  push:
+    branches: [codex/validate-swift-1.4.1]
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    runs-on: macos-26
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Prepare the release archive from the official SeekDB XCFramework
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          asset=seekdb-xcframework-1.4.1.0-ios18.0-arm64-20261125T082132Z-sdbab58f3d233bc.zip
+          gh release download v1.4.1 --repo oceanbase/seekdb --pattern "$asset" --dir "$RUNNER_TEMP"
+          printf '%s  %s\n' d6898736e89ec4eaa40f7a99737557bc3cdd6531b8fc4a744229e0bef0709a41 "$RUNNER_TEMP/$asset" | shasum -a 256 -c
+          ditto -x -k "$RUNNER_TEMP/$asset" "$RUNNER_TEMP/seekdb-engine"
+          mkdir -p build
+          ditto "$RUNNER_TEMP/seekdb-engine/SeekDB.xcframework" build/SeekDBEngine.xcframework
+          export DEVELOPER_DIR="$(xcode-select -p)"
+          echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
+          bash release.sh 1.4.1
+          mkdir -p "$RUNNER_TEMP/publication"
+          cp Package.swift build/release/1.4.1/SeekDBEngine.xcframework.zip "$RUNNER_TEMP/publication/"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: swift-1.4.1-publication
+          path: ${{ runner.temp }}/publication
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
+      - name: Build for an iOS device
+        run: >-
+          xcodebuild -scheme seekdb-swift -destination 'generic/platform=iOS'
+          -derivedDataPath "$RUNNER_TEMP/device" CODE_SIGNING_ALLOWED=NO build
+      - name: Start the engine and run SQL in the iOS example app
+        run: |
+          set -euo pipefail
+          if ! command -v xcodegen >/dev/null; then
+            brew install xcodegen
+          fi
+          device=$(xcrun simctl list devices available -j | jq -er '[.devices | to_entries[] | select(.key | contains(".iOS-")) | .value[] | select(.isAvailable and (.name | startswith("iPhone")))] | (map(select(.name == "iPhone 17 Pro")) + .) | first | .udid')
+          xcrun simctl bootstatus "$device" -b
+          cd example
+          xcodegen generate --quiet
+          xcodebuild -project SeekDBShell.xcodeproj -scheme SeekDBShell \
+            -destination "platform=iOS Simulator,id=$device" \
+            -derivedDataPath "$RUNNER_TEMP/simulator" -parallel-testing-enabled NO \
+            -resultBundlePath "$RUNNER_TEMP/SeekDBShell.xcresult" test
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: swift-1.4.1-ios-test-results
+          path: ${{ runner.temp }}/SeekDBShell.xcresult
+          retention-days: 3
