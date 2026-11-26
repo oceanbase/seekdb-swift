@@ -1,0 +1,50 @@
+name: Verify the published Swift 1.4.1 package
+
+on:
+  push:
+    branches: [codex/build-published-swift-1.4.1]
+
+permissions:
+  contents: read
+
+jobs:
+  consumer:
+    runs-on: macos-26
+    timeout-minutes: 25
+    steps:
+      - name: Create a fresh SwiftPM consumer of the public repository
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/SeekDBConsumer/Sources/SeekDBConsumer"
+          cd "$RUNNER_TEMP/SeekDBConsumer"
+          cat > Package.swift <<'SWIFT'
+          // swift-tools-version: 6.0
+          import PackageDescription
+          let package = Package(
+              name: "SeekDBConsumer",
+              platforms: [.iOS("18.0")],
+              products: [.library(name: "SeekDBConsumer", targets: ["SeekDBConsumer"])],
+              dependencies: [.package(url: "https://github.com/oceanbase/seekdb-swift.git", exact: "1.4.1")],
+              targets: [.target(name: "SeekDBConsumer", dependencies: [.product(name: "SeekDB", package: "seekdb-swift")])]
+          )
+          SWIFT
+          cat > Sources/SeekDBConsumer/Consumer.swift <<'SWIFT'
+          import SeekDB
+          public func readEndpoint(at path: String) throws -> String {
+              let database = try SeekDB.open(path)
+              defer { try? database.close() }
+              return try database.connectionOptions().transport
+          }
+          SWIFT
+      - name: Build the public dependency for device and Simulator
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/SeekDBConsumer"
+          for destination in 'generic/platform=iOS' 'generic/platform=iOS Simulator'; do
+            xcodebuild -scheme SeekDBConsumer -destination "$destination" \
+              -clonedSourcePackagesDirPath "$RUNNER_TEMP/packages" \
+              -derivedDataPath "$RUNNER_TEMP/build" CODE_SIGNING_ALLOWED=NO build
+          done
+          resolution=$(find . -name Package.resolved -print -quit)
+          test -n "$resolution"
+          jq -e '.pins[] | select(.identity == "seekdb-swift" and .state.version == "1.4.1")' "$resolution"
