@@ -10,7 +10,9 @@ permissions:
 
 jobs:
   simulator:
-    runs-on: macos-26
+    runs-on: macos-15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
@@ -53,6 +55,12 @@ jobs:
           test -x "$generator"
           cd example
           "$generator" generate --quiet
+      - name: Start an iOS 18 Simulator while packages resolve
+        run: |
+          set -euo pipefail
+          device=$(xcrun simctl list devices available -j | jq -er '[.devices["com.apple.CoreSimulator.SimRuntime.iOS-18-5"][] | select(.isAvailable and (.name | startswith("iPhone")))] | (map(select(.name == "iPhone 16 Pro")) + .) | first | .udid')
+          xcrun simctl boot "$device"
+          echo "SEEKDB_SIMULATOR=$device" >> "$GITHUB_ENV"
       - name: Resolve dependencies in a clean Xcode cache
         working-directory: example
         timeout-minutes: 5
@@ -64,22 +72,12 @@ jobs:
             jq -e '.pins[] | select(.identity == "seekdb-swift" and .state.version == "1.4.1")' \
               SeekDBShell.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
           fi
-      - name: Boot an iPhone matching the Xcode SDK
-        timeout-minutes: 3
-        run: |
-          set -euo pipefail
-          version=$(xcrun --sdk iphonesimulator --show-sdk-version)
-          runtime="com.apple.CoreSimulator.SimRuntime.iOS-${version//./-}"
-          device=$(xcrun simctl list devices available -j | jq -er --arg runtime "$runtime" '[.devices[$runtime][] | select(.isAvailable and .name == "iPhone 17 Pro")] | first | .udid')
-          xcrun simctl boot "$device"
-          xcrun simctl bootstatus "$device"
-          echo "SEEKDB_SIMULATOR=$device" >> "$GITHUB_ENV"
       - name: Run SQL and reconnect from the example app
         working-directory: example
-        timeout-minutes: 12
+        timeout-minutes: 18
         run: >-
           xcodebuild -project SeekDBShell.xcodeproj -scheme SeekDBShell
-          -destination "platform=iOS Simulator,id=$SEEKDB_SIMULATOR"
+          -destination "platform=iOS Simulator,id=$SEEKDB_SIMULATOR" -destination-timeout 600
           -clonedSourcePackagesDirPath "$RUNNER_TEMP/packages"
           -derivedDataPath "$RUNNER_TEMP/simulator" -parallel-testing-enabled NO
           -resultBundlePath "$RUNNER_TEMP/SeekDBShell.xcresult" test
