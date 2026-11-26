@@ -1,0 +1,81 @@
+name: Verify the published Swift 1.4.1 SDK on iOS
+
+on:
+  push:
+    branches: [codex/verify-published-swift-1.4.1]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  simulator:
+    runs-on: macos-15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: '1.4.1'
+          persist-credentials: false
+      - name: Use the published SwiftPM dependency
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api repos/oceanbase/seekdb-swift/releases/tags/1.4.1 --jq 'select(.draft==false) | .published_at' | grep -q .
+          test ! -d build/SeekDBEngine.xcframework
+          echo 'SEEKDB_PUBLIC=1' >> "$GITHUB_ENV"
+          python3 - <<'PYTHON'
+          from pathlib import Path
+          project = Path("example/project.yml")
+          text = project.read_text()
+          old = "  SeekDB:\n    path: ..\n"
+          assert text.count(old) == 1
+          project.write_text(text.replace(old, '  SeekDB:\n    url: https://github.com/oceanbase/seekdb-swift.git\n    exactVersion: "1.4.1"\n'))
+          PYTHON
+      - name: Generate the Xcode project
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download 2.49.0 --repo yonaskolb/XcodeGen --pattern xcodegen.zip --dir "$RUNNER_TEMP"
+          printf '%s  %s\n' ae5598b33a19ad1e23e775d6648f97375c3529c970905f489358a21055b65e53 "$RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c
+          ditto -x -k "$RUNNER_TEMP/xcodegen.zip" "$RUNNER_TEMP/xcodegen"
+          generator=$(find "$RUNNER_TEMP/xcodegen" -type f -path '*/bin/xcodegen' -print -quit)
+          test -x "$generator"
+          cd example
+          "$generator" generate --quiet
+      - name: Start an iOS 18 Simulator while packages resolve
+        run: |
+          set -euo pipefail
+          device=$(xcrun simctl list devices available -j | jq -er '[.devices["com.apple.CoreSimulator.SimRuntime.iOS-18-5"][] | select(.isAvailable and (.name | startswith("iPhone")))] | (map(select(.name == "iPhone 16 Pro")) + .) | first | .udid')
+          xcrun simctl boot "$device"
+          echo "SEEKDB_SIMULATOR=$device" >> "$GITHUB_ENV"
+      - name: Resolve dependencies in a clean Xcode cache
+        working-directory: example
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          xcodebuild -project SeekDBShell.xcodeproj -scheme SeekDBShell \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/packages" -resolvePackageDependencies
+          if [[ "${SEEKDB_PUBLIC:-0}" == 1 ]]; then
+            jq -e '.pins[] | select(.identity == "seekdb-swift" and .state.version == "1.4.1")' \
+              SeekDBShell.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          fi
+      - name: Run SQL and reconnect from the example app
+        working-directory: example
+        timeout-minutes: 18
+        run: >-
+          xcodebuild -project SeekDBShell.xcodeproj -scheme SeekDBShell
+          -destination "platform=iOS Simulator,id=$SEEKDB_SIMULATOR" -destination-timeout 600
+          -clonedSourcePackagesDirPath "$RUNNER_TEMP/packages"
+          -derivedDataPath "$RUNNER_TEMP/simulator" -parallel-testing-enabled NO
+          -resultBundlePath "$RUNNER_TEMP/SeekDBShell.xcresult" test
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: swift-1.4.1-simulator-results
+          path: ${{ runner.temp }}/SeekDBShell.xcresult
+          retention-days: 3
