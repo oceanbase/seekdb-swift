@@ -23,8 +23,7 @@ checks its checksum; `release.sh` writes both. SwiftPM caches that choice, and
 
 `CSeekDB` is a module map whose `shim.h` includes the framework's own
 `<SeekDB/seekdb.h>`. That header comes from seekdb's
-`rust/in-process/include/seekdb.h` (`src/observer/in_process/seekdb.h` in the seekdb
-revision that release 0.1.0's engine was built from) and declares `seekdb_open`,
+`src/observer/in_process/seekdb.h` in the v1.4.1 engine and declares `seekdb_open`,
 `seekdb_last_open_error`, `seekdb_close` and `seekdb_connection_options`.
 seekdb-bindings' `lib/include/seekdb/seekdb.h` belongs to the out-of-process
 `libseekdb` and is not used here.
@@ -40,7 +39,7 @@ clients would compute such a type's layout without seeing `CSeekDB`.
 ```swift
 // In a consuming package's Package.swift:
 dependencies: [
-    .package(url: "https://github.com/oceanbase/seekdb-swift.git", from: "0.1.0")
+    .package(url: "https://github.com/oceanbase/seekdb-swift.git", from: "1.4.1")
 ],
 targets: [
     .target(name: "MyApp", dependencies: [
@@ -62,16 +61,17 @@ or later. The engine has iOS slices only, so build for an iOS device or Simulato
 with My Mac as the destination, Xcode stops with "While building for macOS, no library
 for this platform was found".
 
+When upgrading from an earlier engine version, export the data first and import
+it into a new 1.4.1 database. See the [SeekDB upgrade notes](https://github.com/oceanbase/seekdb/releases/tag/v1.4.1#upgrade-notes).
+
 ## Build
 
 Requires macOS with full Xcode and the iOS SDKs. `build.sh` uses
 `/Applications/Xcode.app/Contents/Developer` unless `DEVELOPER_DIR` is set.
 
-The in-process engine comes from
-[oceanbase/seekdb#1514](https://github.com/oceanbase/seekdb/pull/1514), which builds it
-with Bazel and is to be merged into `master`. Build the framework in a checkout of its
-branch, `feature/in-process-embedded-mode`, or of `master` once it is merged, and
-package it here:
+SeekDB v1.4.1 ships the in-process engine for iOS. To build it locally, follow
+the [iOS build guide](https://github.com/oceanbase/seekdb/blob/v1.4.1/docs/developer-guide/en/ios.md)
+in the corresponding seekdb checkout, then package both variants here:
 
 ```sh
 cd /path/to/seekdb
@@ -196,22 +196,22 @@ the same day.
 
 `release.sh VERSION` prepares a release of this package in this repository,
 [oceanbase/seekdb-swift](https://github.com/oceanbase/seekdb-swift), the repository
-that apps add by URL. Package the device and Simulator frameworks with `build.sh` from
-a clean seekdb tree first, then, in a clone of this repository:
+that apps add by URL. To use the [official iOS release archive](https://github.com/oceanbase/seekdb/releases/tag/v1.4.1),
+verify its asset digest and copy the included `SeekDB.xcframework` to
+`build/SeekDBEngine.xcframework`. For a local build, package both frameworks from a
+clean seekdb tree with `SEEKDB_DIR=/path/to/seekdb bash build.sh`. Then run:
 
 ```sh
-git clone https://github.com/oceanbase/seekdb-swift.git ~/seekdb-swift
-cd ~/seekdb-swift
-SEEKDB_DIR=/path/to/seekdb bash build.sh
-bash release.sh 0.2.0
+bash release.sh 1.4.1
 ```
 
 It checks that both slices come from the same seekdb revision built without
 uncommitted changes (`ALLOW_DIRTY=1` allows a trial run). The Bazel build does not
 record uncommitted changes, so for its frameworks `release.sh` only warns, and the
-seekdb tree has to be clean when they are built. It then zips the XCFramework
-without macOS `._` files into `build/release/<version>/`, computes the archive's
-checksum, and writes the release asset's URL and that checksum into `releasedEngine`
+seekdb tree has to be clean when they are built. The packaging copy omits
+the engine's `SeekDB` Clang module map so the Swift target can use the same name
+and import the header through `CSeekDB`. The script zips that copy into
+`build/release/<version>/`, computes the checksum, and writes the URL and checksum into `releasedEngine`
 and `releasedEngineChecksum` in `Package.swift`. It then prints the commit, push and
 `gh release create` commands and publishes nothing itself. `gh release create` makes
 the version tag on the pushed commit and uploads the archive; upload exactly the

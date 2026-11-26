@@ -17,8 +17,8 @@ import Foundation
 import PackageDescription
 
 let engineFramework = "build/SeekDBEngine.xcframework"
-let releasedEngine = "https://github.com/oceanbase/seekdb-swift/releases/download/0.1.0/SeekDBEngine.xcframework.zip"
-let releasedEngineChecksum = "20eb7bcb6f20912887251b13cd3819e9ac0a6cf043175135c6591060e79a783e"
+let releasedEngine = "https://github.com/oceanbase/seekdb-swift/releases/download/1.4.1/SeekDBEngine.xcframework.zip"
+let releasedEngineChecksum = "3d572c5253d4b7d6b09ddd47ad6917d6a341af162b0e4968d66080a23b660280"
 let engine: Target = FileManager.default.fileExists(atPath: Context.packageDirectory + "/" + engineFramework)
     ? .binaryTarget(name: "SeekDBEngine", path: engineFramework)
     : .binaryTarget(name: "SeekDBEngine", url: releasedEngine, checksum: releasedEngineChecksum)
