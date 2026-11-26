@@ -1,0 +1,19 @@
+.github/workflows/validate-swift-1.4.1.yml
+  s_5b4e273885bb1f::t_706ec96a950f25 1-64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "d47d7e459c22ff1bc409b91d9f35c40126f8d497",
+  "prompts": {},
+  "sessions": {
+    "s_5b4e273885bb1f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a21750-a16e-7000-862c-b1a578042c87",
+        "model": "gpt-6.2-sol"
+      },
+      "human_author": "wangyunlai.wyl <wangyunlai.wyl@U-Y44N21LQ-2319.local>"
+    }
+  }
+}
